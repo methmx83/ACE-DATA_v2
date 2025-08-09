@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: ACE-STEP-DATA-TOOL-v2
+Version: 0.1.0
+Summary: Modulares Data-Tool. Erstellt automatisch die Trainingsdaten für ACE-STEP
+Author: Sven kettmann
+Requires-Python: >=3.7
+Requires-Dist: gradio>=5.35.0
+Requires-Dist: requests
+Requires-Dist: beautifulsoup4
+Requires-Dist: numpy
+Requires-Dist: librosa
+Requires-Dist: mutagen
+Requires-Dist: nltk
+Requires-Dist: soundfile
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: resampy
+Requires-Dist: lazy_loader
+Requires-Dist: tinytag
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
