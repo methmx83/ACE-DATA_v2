@@ -1,0 +1,18 @@
+* text=auto
+
+# Quelltext: LF
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
+
+# Windows-Skripte: CRLF
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binär/Audio: nicht normalisieren
+*.wav  -text
+*.mp3  -text
+*.flac -text

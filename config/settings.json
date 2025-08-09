@@ -1,0 +1,13 @@
+{
+  "input_dir": "data/audio",
+  "output_dir": "data/cache",
+  "genre_preset": "hiphop",
+  "bpm": {
+    "start_bpm": 92.0,
+    "std_bpm": 1.0,
+    "max_tempo": 220.0,
+    "range_lo": 70.0,
+    "range_hi": 180.0,
+    "snap_thresh": 0.6
+  }
+}

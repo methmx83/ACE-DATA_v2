@@ -19,53 +19,55 @@ from include.prompt_editor import prompt_editor_ui
 from tinytag import TinyTag
 from include.preset_loader import load_presets
 from scripts.lyrics import load_lyrics, fetch_and_save_lyrics
-from scripts.bpm import get_bpm
 from scripts.tagger import generate_tags, save_tags
-from typing import Generator  # Importiere Generator für den korrekten Rückgabetyp.
 from shared_logs import LOGS, log_message
 # Importiere LOGS und log_message aus shared_logs.py.
 
+import json
 
-AUDIO_DIR = "data"
+# AUDIO_DIR aus Konfiguration lesen (Single Source of Truth)
+with open(os.path.join(project_root, 'config', 'config.json'), 'r', encoding='utf-8') as _cf:
+    _conf = json.load(_cf)
+AUDIO_DIR = _conf.get('input_dir', 'data')
 
 # Lade Genre-Presets
 GENRE_PRESETS = load_presets()
 
-def process_file(mp3_path: str, overwrite_lyrics: bool = False, prompt_guidance: str = "") -> str:
+def process_file(mp3_path: str, overwrite_lyrics: bool = False,
+                 overwrite_prompts: bool = False, prompt_guidance: str = "") -> str:
     base, _ = os.path.splitext(mp3_path)
-    tag = TinyTag.get(mp3_path)
-    artist = tag.artist or "Unknown"
-    title = tag.title or "Unknown"
+    # TinyTag robust auslesen
+    try:
+        tag = TinyTag.get(mp3_path)
+        artist = tag.artist or "Unknown"
+        title = tag.title or "Unknown"
+    except Exception:
+        artist, title = "Unknown", "Unknown"
 
     lyrics_path = f"{base}_lyrics.txt"
-    if not os.path.exists(lyrics_path) or overwrite_lyrics:
+    if overwrite_lyrics or not os.path.exists(lyrics_path):
         fetch_and_save_lyrics(artist, title, lyrics_path)
-    lyrics = load_lyrics(mp3_path) or "–"
 
-    # Abbruch, wenn keine Lyrics gefunden wurden
+    lyrics = load_lyrics(mp3_path) or "–"
     if lyrics == "–":
-        print(f"No Lyrics {mp3_path} found. Abort!")
-        return f"🎵 {os.path.basename(mp3_path)}\n✗ Keine Lyrics gefunden."
+        log_message(f"✗ No Lyrics {mp3_path} found. Abort!")
+        return f"✗ {os.path.basename(mp3_path)}: No lyrics"
 
     tags_path = f"{base}_prompt.txt"
-    # Tags nicht neu generieren, wenn bereits vorhanden
-    if os.path.exists(tags_path):
-        print(f"Tags {mp3_path} already exist. Skip generation.")
-        return f"🎵 {os.path.basename(mp3_path)}\n✓ Tags already exist."
+    if not overwrite_prompts and os.path.exists(tags_path):
+        log_message(f"✓ Tags exist -> skipped: {os.path.basename(mp3_path)}")
+        return "skipped"
 
-    bpm = get_bpm(mp3_path) or "–"
     tags = generate_tags(mp3_path, prompt_guidance=prompt_guidance)
     save_tags(mp3_path, tags)
 
-    return f"✅ Files processed successfully."
+    log_message(f"✅ Files processed: {os.path.basename(mp3_path)}")
+    return "done"
 
-def process_all_ui(overwrite_lyrics: bool = False, genre: str = "Custom", mood: float = 0.0, user_prompt: str = "", progress=gr.Progress()) -> str:
-    if user_prompt.strip():
-        prompt_guidance = user_prompt.strip()
-    else:
-        base = GENRE_PRESETS.get(genre) or ""
-        mood_tag = "happy" if mood > 0.3 else "sad" if mood < -0.3 else "neutral"
-        prompt_guidance = f"{base}, {mood_tag}".strip(", ")
+def process_all_ui(overwrite_lyrics: bool = False, overwrite_prompts: bool = False,
+                   genre: str = "Choose a Preset (optional)", progress=gr.Progress()) -> str:
+    base = GENRE_PRESETS.get(genre) or ""
+    prompt_guidance = base.strip()
 
     log = []
     audio_files = []
@@ -76,10 +78,17 @@ def process_all_ui(overwrite_lyrics: bool = False, genre: str = "Custom", mood: 
 
     for file_path in progress.tqdm(audio_files, desc="Processing Songs"):
         try:
-            log.append(process_file(file_path, overwrite_lyrics=overwrite_lyrics, prompt_guidance=prompt_guidance))
+            process_file(
+                file_path,
+                overwrite_lyrics=overwrite_lyrics,
+                overwrite_prompts=overwrite_prompts,
+                prompt_guidance=prompt_guidance
+            )
         except Exception as e:
-            log.append(f"✗ {os.path.basename(file_path)}: {e}")
-    return "\n\n---\n\n".join(log)
+            log_message(f"✗ {os.path.basename(file_path)}: {e}")
+
+    # Log-Box: komplette Session (ggf. begrenzen)
+    return "\n".join(LOGS[-1000:])
 
 def export_to_folder(destination: str) -> str:
     if not os.path.exists(destination):
@@ -89,15 +98,17 @@ def export_to_folder(destination: str) -> str:
             return f"❌ Destination folder could not be created:\n{e}"
 
     files_copied = 0
-    for file in os.listdir(AUDIO_DIR):
-        if file.endswith((".mp3", "_prompt.txt", "_lyrics.txt")):
-            src = os.path.join(AUDIO_DIR, file)
-            dst = os.path.join(destination, file)
-            try:
-                shutil.copy(src, dst)
-                files_copied += 1
-            except Exception as e:
-                return f"❌ Error copying {file}: {e}"
+    # Rekursiv exportieren, damit auch data/audio/* mitgenommen wird
+    for root, _, files in os.walk(AUDIO_DIR):
+        for file in files:
+            if file.endswith((".mp3", "_prompt.txt", "_lyrics.txt")):
+                src = os.path.join(root, file)
+                dst = os.path.join(destination, file)
+                try:
+                    shutil.copy(src, dst)
+                    files_copied += 1
+                except Exception as e:
+                    return f"❌ Error copying {file}: {e}"
 
     return f"✅ {files_copied} Files exported to:\n{destination}"
 
@@ -110,83 +121,55 @@ def run_python_script():
         return f"❌ Error executing script: {e}"
 
 
+# Default Info Text
+INFO_TEXT_DEFAULT = (
+    "Tipps zur Nutzung:\n"
+    "- Lege Audios ins konfigurierte input_dir (z. B. data/audio)\n"
+    "- Preset wählen oder neutral lassen\n"
+    "- 'Überschreibe Lyrics' -> *_lyrics.txt wird neu erzeugt\n"
+    "- 'Überschreibe Prompts' -> *_prompt.txt wird neu erzeugt\n"
+    "- Fortschritt & Status in der linken Log-Box"
+)
+
 with gr.Blocks(css="""
-body {
-  background-color: #121212;
-  color: #f0f0f0;
-  font-family: 'Segoe UI', sans-serif;
-}
-.gr-button {
-  background: linear-gradient(90deg, #8e2de2, #4a00e0);
-  color: white;
-  font-weight: bold;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 24px;
-  transition: all 0.3s ease;
-}
-.gr-button:hover {
-  background: linear-gradient(90deg, #4a00e0, #8e2de2);
-  transform: scale(1.03);
-}
-.gr-textbox textarea {
-  background-color: #1e1e1e;
-  border: 1px solid #444;
-  color: #fff;
-  font-size: 14px;
-  border-radius: 8px;
-  text-align: center; /* Zentriert den Text in der Textbox */
-}
-h1, h2, h3 {
-  color: #e0b0ff;
-  text-shadow: 0 0 6px rgba(255, 0, 255, 0.2);
-}
-
-#prompt_input {
-  width: 70%;
-}
-
-#model_dropdown {
-  display: none;
-}
+body { background-color: #121212; color: #f0f0f0; font-family: 'Segoe UI', sans-serif; }
+.gr-button { background: linear-gradient(90deg, #8e2de2, #4a00e0); color: white; font-weight: bold; border: none; border-radius: 12px; padding: 12px 24px; transition: all 0.3s ease; }
+.gr-button:hover { background: linear-gradient(90deg, #4a00e0, #8e2de2); transform: scale(1.03); }
+.gr-textbox textarea { background-color: #1e1e1e; border: 1px solid #444; color: #fff; font-size: 14px; border-radius: 8px; text-align: center; }
+h1, h2, h3 { color: #e0b0ff; text-shadow: 0 0 6px rgba(255, 0, 255, 0.2); }
+#model_dropdown { display: none; }
 """) as demo:
 
-    gr.Markdown("""# 🎧 ACE-STEP DATA-TOOL
-**Generates data-files für Ace-Step – fully automated.**""")
-    
-    # Steuerelemente verschoben
-    with gr.Row():
-        lyrics_checkbox = gr.Checkbox(label="Overwrite lyrics", value=False)
-        genre_dropdown = gr.Dropdown(label="🎼 Genre-Preset", choices=list(GENRE_PRESETS.keys()), value="Choose a Preset (optional)")
-        mood_slider = gr.Slider(label="🎭 Mood:  Sad ↔ Happy", minimum=-1.0, maximum=1.0, value=0.0, step=0.1)
+    gr.Markdown("# 🎧 ACE-STEP DATA-TOOL\n**Generates data-files für Ace-Step – fully automated.**")
 
     with gr.Row():
-        prompt_input = gr.Textbox(
-            label="✍️ Prompt addition (optional)", 
-            placeholder="orchestral, melancholic, strings, 80 bpm", 
-            lines=1, 
-            elem_id="prompt_input"
+        genre_dropdown = gr.Dropdown(
+            label="🎼 Genre-Preset",
+            choices=list(GENRE_PRESETS.keys()),
+            value="Choose a Preset (optional)",
+            interactive=True
         )
+        overwrite_lyrics_cb = gr.Checkbox(label="Überschreibe Lyrics", value=False)
+        overwrite_prompts_cb = gr.Checkbox(label="Überschreibe Prompts", value=False)
 
+    # Progress-Bar kommt aus process_all_ui via gr.Progress()
 
-    # Prozess-Log-Box ganz oben
-    output_box = gr.Textbox(label="Process Log", lines=4, interactive=False)
+    with gr.Row():
+        output_box = gr.Textbox(label="Process Log Box", lines=16, interactive=False)
+        info_box = gr.Textbox(label="Info Text Box", value=INFO_TEXT_DEFAULT, lines=16, interactive=True)
 
-    # Button
     start_button = gr.Button("Start Tagging")
     start_button.click(
         fn=process_all_ui,
-        inputs=[lyrics_checkbox, genre_dropdown, mood_slider, prompt_input],
+        inputs=[overwrite_lyrics_cb, overwrite_prompts_cb, genre_dropdown],
         outputs=output_box
     )
 
-    # Prompt Editor Tab direkt unter der Output-Box
     with gr.Tab("📝 Prompt Editor   -> post-processing <-"):
         prompt_editor_ui()
         run_script_button = gr.Button("Fix Bpm")
         run_script_button.click(fn=run_python_script, inputs=[], outputs=output_box)
 
-    # Export
     with gr.Row():
         export_folder = gr.Textbox(label="ACE-Step Export", value="Z:/AI/projects/music/ace-step/data/")
         export_button = gr.Button("📤 Export")

@@ -190,7 +190,7 @@ def generate_tags(file_path, prompt_guidance=None, attempt=1):
 
     filename = os.path.basename(file_path)
     lyrics = load_lyrics(file_path)
-    bpm_value = detect_tempo(file_path)
+    bpm = detect_tempo(file_path, settings_path="config/settings.json")
 
     try:
         tag = TinyTag.get(file_path)
