@@ -1,3 +1,9 @@
+#
+# Modul: Lyrics-Scraper
+# Zweck: Liest Metadaten aus Audiodateien, ruft Songtexte von Genius (2 URL-Varianten
+#        plus Such-Fallback) ab und speichert sie als <basename>_lyrics.txt.
+# Nutzung: Wird von der Gradio-UI (webui/app.py) im Verarbeitungs-Flow aufgerufen.
+#
 import os
 import re
 import time
@@ -13,27 +19,29 @@ from urllib.parse import quote
 
 from include.metadata import clean_rap_metadata, normalize_string
 
-# Configuration
+# Konfiguration
+# - HEADERS: Browser-ähnlicher User-Agent, erhöht die Erfolgsquote beim Scraping.
+# - REQUEST_DELAY: Wartezeit (Sekunden), bevor die Fallback-Suche verwendet wird
+#                  (hilft, Rate-Limits/Blockierungen zu vermeiden).
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                   'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 }
 REQUEST_DELAY = 1.5
 
+# Funktion: get_audio_metadata(file_path)
+# - Eingabe: Pfad zu einer Audio-Datei (mp3, flac, wav, m4a, ...)
+# - Ausgabe: Dict mit 'title', 'artist', 'album' (leere Strings bei Fehlern)
+# - Nebenwirkungen: Log-Ausgaben über log_message; Exceptions werden intern abgefangen
 def get_audio_metadata(file_path):
-    """Read title, artist, album from any audio file using Tinytag (supports WAV, MP3, FLAC, etc.)"""
-    try:
-        tag = TinyTag.get(file_path)
-        title = tag.title or 'Unknown Title'
-        artist = tag.artist or 'Unknown Artist'
-        album = tag.album or 'Unknown Album'
-        log_message(f"🎵 [Tinytag] Title={title}, Artist={artist}")  # Kürzere Ausgabe
-        return {'title': title, 'artist': artist, 'album': album}
-    except Exception as e:
-        log_message(f"⚠️ Metadata errors: {e}")  # Kürzere Ausgabe
-        return {'title': '', 'artist': '', 'album': ''}
+    from scripts.helpers.metadata import get_audio_metadata as _meta
+    return _meta(file_path)
 
 
+# Funktion: process_single_file(file_path)
+# - Zweck: Holt Lyrics für eine einzelne Datei und speichert sie als <basename>_lyrics.txt
+# - Verhalten: Liest Artist/Title via TinyTag → get_lyrics → schreibt UTF-8-Datei mit Header
+# - Rückgabe: True bei Erfolg, False bei Fehlern (Exceptions werden unterdrückt)
 def process_single_file(file_path):
     """Fetch and save lyrics for one audio file"""
     try:
@@ -53,6 +61,10 @@ def process_single_file(file_path):
         return False
 
 
+# Funktion: scrape_genius_lyrics(artist, title)
+# - Zweck: Direkter Versuch über zwei deterministische Genius-URL-Varianten
+# - Ablauf: Erst Artist-Title, dann Title-Artist; parst Lyrics-Container und entfernt Referenz-Blöcke
+# - Rückgabe: Lyrics-Text oder leerer String bei Nicht-Erfolg
 def scrape_genius_lyrics(artist, title):
     """Try two URL patterns to fetch lyrics HTML"""
     clean_artist = clean_rap_metadata(artist)
@@ -82,6 +94,10 @@ def scrape_genius_lyrics(artist, title):
     return ''
 
 
+# Funktion: genius_search_fallback(artist, title)
+# - Zweck: Fallback-Suche über die Genius-Suchseite, wenn direkte URLs scheitern
+# - Strategie: Nimmt den ersten '/lyrics'-Treffer, der im Linktext den Artist enthält
+# - Rückgabe: Lyrics-Text oder leerer String
 def genius_search_fallback(artist, title):
     """Fallback search via Genius search page"""
     query = quote(f"{artist} {title}")
@@ -97,6 +113,9 @@ def genius_search_fallback(artist, title):
     return ''
 
 
+# Funktion: scrape_genius_lyrics_from_url(url)
+# - Zweck: Scraping, wenn die konkrete Lyrics-URL bereits bekannt ist (aus Suche)
+# - Rückgabe: Zusammengefügter Lyrics-Text aus allen Lyrics-Containern oder leerer String
 def scrape_genius_lyrics_from_url(url):
     """Scrape lyrics from a discovered Genius URL"""
     resp = requests.get(url, headers=HEADERS)
@@ -107,6 +126,10 @@ def scrape_genius_lyrics_from_url(url):
     return ''
 
 
+# Funktion: get_lyrics(artist, title)
+# - Zweck: Orchestriert den Lyrics-Bezug: Direktversuch → (Pause) → Such-Fallback
+# - Rückgabe: Lyrics-Text oder '⚠️ Lyrics not found'
+# - Logging: Kurze Statusmeldungen mit log_message
 def get_lyrics(artist, title):
     log_message(f"🔄 Search lyrics for: {artist} - {title}")  # Kürzere Ausgabe
     lyrics = scrape_genius_lyrics(artist, title)
@@ -116,6 +139,9 @@ def get_lyrics(artist, title):
     return lyrics or '⚠️ Lyrics not found'
 
 
+# Funktion: load_lyrics(file_path)
+# - Zweck: Lädt vorhandene <basename>_lyrics.txt, falls diese existiert
+# - Rückgabe: Dateiinhalt (UTF-8) oder leerer String
 def load_lyrics(file_path):
     """Load existing lyrics file if present"""
     base = os.path.splitext(file_path)[0]
@@ -123,6 +149,10 @@ def load_lyrics(file_path):
     return open(path, 'r', encoding='utf-8').read() if os.path.exists(path) else ''
 
 
+# Funktion: fetch_and_save_lyrics(artist, title, output_path)
+# - Zweck: Holt Lyrics zu Artist/Title und schreibt sie direkt an den angegebenen Pfad
+# - Unterschied zu process_single_file: schreibt nur die Lyrics (ohne Header-Zeilen)
+# - Rückgabe: True bei Erfolg, sonst False
 def fetch_and_save_lyrics(artist, title, output_path):
     """Orchestrate lyrics fetch + save to output_path"""
     lyrics = get_lyrics(artist, title)

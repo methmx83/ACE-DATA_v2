@@ -1,3 +1,10 @@
+# 
+# Modul: Music-Tagger (Ollama)
+# Zweck: Generiert strukturierte Musik-Tags (12–14) je Track aus Lyrics, BPM und optionaler Prompt-Guidance.
+#        Kommuniziert mit der Ollama Chat-API; besitzt robuste Retry-/Recovery-Strategien (Reset/Unload/Reload).
+# Nutzung: Wird durch die Gradio-UI (webui/app.py) angestoßen; schreibt `<basename>_prompt.txt`.
+# Abhängigkeiten: TinyTag/Librosa/NLTK, include/clean_lyrics.py, scripts/moods.py (Tag-Validierung), config/config.json.
+#
 # 🔁 Erweiterte generate_tags() mit Prompt-Guidance und stabiler API-Integration
 
 import os
@@ -20,9 +27,9 @@ import librosa
 from librosa.feature import rhythm
 
 from scripts.lyrics import load_lyrics
-from scripts.bpm import detect_tempo
 from scripts.moods import extract_clean_tags
-from include.clean_lyrics import main as clean_lyrics_main
+from scripts.helpers.bpm import detect_tempo                  # <- neu: nutzt helpers/bpm.py
+from scripts.helpers.lyrics_cleaner import clean_lyrics_file  # <- neu: nutzt helpers/lyrics_cleaner.py
 
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -40,7 +47,14 @@ warnings.filterwarnings("ignore", message="Lame tag CRC check failed")
 warnings.filterwarnings("ignore", module="librosa")
 warnings.filterwarnings("ignore", message="Xing stream size off by more than 1%")
 
-# Lade Konfiguration aus JSON-Datei
+# Konfiguration laden
+# - Quelle: ../config/config.json
+# - Keys:
+#   - input_dir: Arbeitsordner (typisch 'data')
+#   - model_name: Ollama-Modell (z. B. deep-x1_q4:latest)
+#   - ollama_url: Basis `/api/generate` (wird unten auf `/chat` & `/reset` abgebildet)
+#   - retry_count: maximale Wiederholversuche
+#   - request_delay: Pause zwischen Anfragen
 config_path = os.path.join(os.path.dirname(__file__), '../config/config.json')
 with open(config_path, 'r') as config_file:
     config = json.load(config_file)
@@ -51,11 +65,15 @@ OLLAMA_URL    = config['ollama_url']
 RETRY_COUNT   = config['retry_count']
 REQUEST_DELAY = config['request_delay']
 
-# Konvertiere URLs für API-Endpoints
+# API-Endpunkte aus Basis-URL ableiten (Generate → Chat/Reset)
 OLLAMA_CHAT_URL = OLLAMA_URL.replace('/generate', '/chat')
 OLLAMA_RESET_URL = OLLAMA_URL.replace('/generate', '/reset')
 
 # 🔄 Modell-Management-Funktionen
+# - reset_ollama_context(): setzt Server-Kontext zurück (leichtgewichtig)
+# - unload_model(): entlädt aktives Modell (RAM frei)
+# - load_model(): lädt Modell (warm start)
+# - reload_model(): Kombination aus unload + load
 def reset_ollama_context():
     """Setzt den Kontext des LLMs zurück"""
     try:
@@ -112,6 +130,9 @@ def reload_model():
         time.sleep(2)  # Short pause for RAM release
     return load_model()
 
+# Hilfsfunktion: Dateinamen bereinigen (ASCII-only, sicher für Filesystem/Logs)
+# - Eingaben: Name (str), max_length (int)
+# - Rückgabe: bereinigter/gekürzter Name
 def sanitize_filename(name: str, max_length=120) -> str:
     name = unicodedata.normalize('NFKD', name)
     name = name.encode('ascii', 'ignore').decode('ascii')
@@ -119,6 +140,9 @@ def sanitize_filename(name: str, max_length=120) -> str:
     name = re.sub(r'[-\s]+', '_', name)
     return name[:max_length]
 
+# Ausgabe-Helfer: Tags speichern und zugehörige Lyrics bereinigen
+# - Schreibt `<basename>_prompt.txt` (Komma-separiert)
+# - Ruft `include.clean_lyrics.bereinige_datei` auf, um `_lyrics.txt` vor dem Gebrauch zu säubern
 def save_tags(file_path, tags):
     if not tags:
         return
@@ -129,10 +153,28 @@ def save_tags(file_path, tags):
 
     # Clean up the lyrics file
     lyrics_file = os.path.splitext(file_path)[0] + "_lyrics.txt"
-    from include.clean_lyrics import bereinige_datei
-    bereinige_datei(lyrics_file)
+    clean_lyrics_file(lyrics_file)  # <- ersetzt import+Aufruf von include.clean_lyrics
 
 def generate_tags(file_path, prompt_guidance=None, attempt=1):
+    """
+    Erzeugt 12–14 Musik-Tags für eine Datei.
+
+    Parameter:
+        file_path (str): Pfad zur Audiodatei
+        prompt_guidance (str|None): optionale Zusatzanweisung (Preset/Mood/User)
+        attempt (int): aktueller Retry-Versuch
+
+    Ablauf:
+        1) Lyrics-Datei bereinigen → Lyrics laden
+        2) BPM bestimmen (scripts.bpm.detect_tempo)
+        3) System-/User-Prompt zusammensetzen, an Ollama senden
+        4) Antwort parsen (scripts.moods.extract_clean_tags)
+        5) BPM-Tag sicherstellen (an den Anfang verschieben)
+        6) Bei Fehlern: Reset/Reload mit progressiven Delays bis RETRY_COUNT
+
+    Returns:
+        list[str] | None: Tags oder None bei finalem Fehler
+    """
 
     # Clean up the lyrics file before tag generation
     lyrics_file = os.path.splitext(file_path)[0] + "_lyrics.txt"

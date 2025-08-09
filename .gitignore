@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.ipynb_checkpoints/
+.venv
+*.egg-info/
+*.sqlite
+
+# Audio lokal behalten, nicht committen
+data/audio/**
+!data/audio/.gitkeep
+data/**/*.txt
+data/**/*.mp3
+data/**/*.flag
+data/**/*.wav
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Temp-Dateien
+*.tmp
+*.swp
+*.bak
