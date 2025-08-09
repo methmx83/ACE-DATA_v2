@@ -24,7 +24,7 @@ log_message("... Music Tagger Script loaded ✅")
 from tinytag import TinyTag
 import numpy as np
 import librosa
-from librosa.feature import rhythm
+# from librosa.feature import rhythm  # unused
 
 from scripts.lyrics import load_lyrics
 from scripts.moods import extract_clean_tags
@@ -190,7 +190,8 @@ def generate_tags(file_path, prompt_guidance=None, attempt=1):
 
     filename = os.path.basename(file_path)
     lyrics = load_lyrics(file_path)
-    bpm = detect_tempo(file_path, settings_path="config/settings.json")
+    # Detect BPM (do not pass unknown kwargs; helper returns int or None)
+    bpm = detect_tempo(file_path)
 
     try:
         tag = TinyTag.get(file_path)
@@ -202,6 +203,11 @@ def generate_tags(file_path, prompt_guidance=None, attempt=1):
     excerpt = f"[LYRICS EXCERPT]\n{lyrics[:300]}[...]\n\n" if lyrics else ""
 
     # System-Prompt mit klarer Struktur
+    bpm_int = int(round(bpm)) if isinstance(bpm, (int, float)) else None
+    if bpm_int is not None:
+        log_message(f"🎚️ Detected BPM: {bpm_int}")
+    else:
+        log_message("🎚️ BPM unknown (detection returned None)")
     system_prompt = f"""
 ### ROLE
 You are an expert music tagging AI
@@ -209,7 +215,7 @@ You are an expert music tagging AI
 ### METADATA
 Artist: {artist}
 Title: {title}
-BPM: {bpm_value or 'Unknown'}
+BPM: {bpm_int if bpm_int is not None else 'Unknown'}
 
 {excerpt}### STYLE GUIDANCE
 {prompt_guidance or 'Use your best judgment based on the audio'}
@@ -261,10 +267,11 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
         tags = extract_clean_tags(raw)
 
         # Ensure BPM tag
-        if bpm_value:
-            bpm_tag = f"bpm-{bpm_value}"
+        if bpm_int is not None:
+            bpm_tag = f"bpm-{bpm_int}"
             if bpm_tag not in tags:
                 tags.append(bpm_tag)
+            # If BPM tag is too far back, move it near the front
             if bpm_tag in tags and tags.index(bpm_tag) > 4:
                 tags.remove(bpm_tag)
                 tags.insert(0, bpm_tag)

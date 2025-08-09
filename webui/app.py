@@ -10,12 +10,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))  # webui/
 project_root = os.path.dirname(current_dir)              # ace-data_tool/
 sys.path.append(os.path.join(project_root, 'scripts'))
 sys.path.append(os.path.join(project_root, 'include'))
-sys.path.append(os.path.join(project_root, 'tools'))
 
 
-import shutil
 import gradio as gr
-from include.prompt_editor import prompt_editor_ui
 from tinytag import TinyTag
 from include.preset_loader import load_presets
 from scripts.lyrics import load_lyrics, fetch_and_save_lyrics
@@ -90,36 +87,6 @@ def process_all_ui(overwrite_lyrics: bool = False, overwrite_prompts: bool = Fal
     # Log-Box: komplette Session (ggf. begrenzen)
     return "\n".join(LOGS[-1000:])
 
-def export_to_folder(destination: str) -> str:
-    if not os.path.exists(destination):
-        try:
-            os.makedirs(destination, exist_ok=True)
-        except Exception as e:
-            return f"❌ Destination folder could not be created:\n{e}"
-
-    files_copied = 0
-    # Rekursiv exportieren, damit auch data/audio/* mitgenommen wird
-    for root, _, files in os.walk(AUDIO_DIR):
-        for file in files:
-            if file.endswith((".mp3", "_prompt.txt", "_lyrics.txt")):
-                src = os.path.join(root, file)
-                dst = os.path.join(destination, file)
-                try:
-                    shutil.copy(src, dst)
-                    files_copied += 1
-                except Exception as e:
-                    return f"❌ Error copying {file}: {e}"
-
-    return f"✅ {files_copied} Files exported to:\n{destination}"
-
-def run_python_script():
-    try:
-        script_path = os.path.join(current_dir, "../tools/bpm_fixer.py")
-        os.system(f"python {script_path}")
-        return "✅ Script executed successfully."
-    except Exception as e:
-        return f"❌ Error executing script: {e}"
-
 
 # Default Info Text
 INFO_TEXT_DEFAULT = (
@@ -165,15 +132,7 @@ h1, h2, h3 { color: #e0b0ff; text-shadow: 0 0 6px rgba(255, 0, 255, 0.2); }
         outputs=output_box
     )
 
-    with gr.Tab("📝 Prompt Editor   -> post-processing <-"):
-        prompt_editor_ui()
-        run_script_button = gr.Button("Fix Bpm")
-        run_script_button.click(fn=run_python_script, inputs=[], outputs=output_box)
-
-    with gr.Row():
-        export_folder = gr.Textbox(label="ACE-Step Export", value="Z:/AI/projects/music/ace-step/data/")
-        export_button = gr.Button("📤 Export")
-        export_button.click(fn=export_to_folder, inputs=export_folder, outputs=output_box)
+    
 
 def main():
     demo.launch(server_name="127.0.0.1", server_port=7860)
