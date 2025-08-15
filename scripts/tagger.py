@@ -42,6 +42,7 @@ REQUEST_DELAY = float(config.get('request_delay', 1.0))  # falls vorhanden
 HF_MODEL_PATH = config.get('hf_model_path', "")
 USE_AUDIO     = bool(config.get('use_audio', False))
 DEBUG_MODE    = bool(config.get('debug', False))
+DEBUG_RAW_MAX_BYTES = int(config.get('debug_raw_max_bytes', 1048576))  # 1 MiB default
 
 # Optional: Decoding-Defaults aus Config (falls gesetzt)
 GEN_MAX_NEW_TOKENS   = int(config.get("gen_max_new_tokens", 64))
@@ -233,17 +234,44 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                 os.makedirs(logs_dir, exist_ok=True)
                 base = os.path.splitext(os.path.basename(file_path))[0]
                 raw_path = os.path.join(logs_dir, f"{base}_llm_raw.txt")
+                header = (
+                    "# LLM RAW OUTPUT\n"
+                    f"timestamp: {datetime.utcnow().isoformat()}Z\n"
+                    "provider: MuFun\n"
+                    f"mode: {'chat' if hasattr(model,'chat') else 'generate'}\n"
+                    f"use_audio: {USE_AUDIO}\n"
+                    f"max_new_tokens: {GEN_MAX_NEW_TOKENS}, temperature: {GEN_TEMPERATURE}, top_p: {GEN_TOP_P}, repetition_penalty: {GEN_REPETITION_PENALTY}\n\n"
+                    "## PROMPT\n"
+                    f"{combined_prompt}\n\n"
+                    "## RAW\n"
+                )
+                raw_text = str(raw)
+
+                # Begrenze Ausgabegröße auf debug_raw_max_bytes (falls konfiguriert)
+                content_to_write = None
+                if isinstance(DEBUG_RAW_MAX_BYTES, int) and DEBUG_RAW_MAX_BYTES > 0:
+                    header_bytes = header.encode('utf-8')
+                    raw_bytes = raw_text.encode('utf-8')
+                    total_bytes = len(header_bytes) + len(raw_bytes)
+                    if total_bytes > DEBUG_RAW_MAX_BYTES:
+                        # Platz für Header + gekürzten RAW + Hinweis reservieren
+                        # Reserve für Hinweis (konservativ): 256 Bytes
+                        reserve_note = 256
+                        allowed_for_raw = max(DEBUG_RAW_MAX_BYTES - len(header_bytes) - reserve_note, 0)
+                        raw_kept = raw_bytes[:allowed_for_raw]
+                        raw_kept_text = raw_kept.decode('utf-8', errors='ignore')
+                        note = (
+                            "\n\n[TRUNCATED] RAW content was truncated to respect debug_raw_max_bytes. "
+                            f"original_bytes={len(raw_bytes)}, kept_bytes={len(raw_kept)}, limit={DEBUG_RAW_MAX_BYTES}\n"
+                        )
+                        content_to_write = header + raw_kept_text + note
+                    else:
+                        content_to_write = header + raw_text
+                else:
+                    content_to_write = header + raw_text
+
                 with open(raw_path, "w", encoding="utf-8") as rf:
-                    rf.write(f"# LLM RAW OUTPUT\n")
-                    rf.write(f"timestamp: {datetime.utcnow().isoformat()}Z\n")
-                    rf.write(f"provider: MuFun\n")
-                    rf.write(f"mode: {'chat' if hasattr(model,'chat') else 'generate'}\n")
-                    rf.write(f"use_audio: {USE_AUDIO}\n")
-                    rf.write(f"max_new_tokens: {GEN_MAX_NEW_TOKENS}, temperature: {GEN_TEMPERATURE}, top_p: {GEN_TOP_P}, repetition_penalty: {GEN_REPETITION_PENALTY}\n\n")
-                    rf.write("## PROMPT\n")
-                    rf.write(combined_prompt)
-                    rf.write("\n\n## RAW\n")
-                    rf.write(str(raw))
+                    rf.write(content_to_write)
                 # Green
                 log_message(f"\x1b[32m💾 RAW saved: {os.path.basename(raw_path)}\x1b[0m")
             except Exception as e:
