@@ -172,8 +172,9 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
         # Debug: Eingabe-Kontext/Parameter kurz protokollieren (gekürzt)
         if DEBUG_MODE:
             prompt_preview = combined_prompt[:400].replace("\n", " ")
+            # Cyan
             log_message(
-                f"🔎 LLM call | provider=MuFun | use_audio={USE_AUDIO} | mode=auto | max_new_tokens={GEN_MAX_NEW_TOKENS} | temp={GEN_TEMPERATURE} | top_p={GEN_TOP_P} | prompt[0:400]='{prompt_preview}'"
+                f"\x1b[36m🔎 LLM call | provider=MuFun | use_audio={USE_AUDIO} | mode=auto | max_new_tokens={GEN_MAX_NEW_TOKENS} | temp={GEN_TEMPERATURE} | top_p={GEN_TOP_P} | prompt[0:400]='{prompt_preview}'\x1b[0m"
             )
 
         # Inferenz mit Fallback (chat → generate)
@@ -192,7 +193,8 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                     )
                     raw = result.get("prompt") if isinstance(result, dict) else str(result)
                     if DEBUG_MODE:
-                        log_message("🔁 LLM mode=chat (audio_files={} )".format(bool(USE_AUDIO)))
+                        # Magenta
+                        log_message("\x1b[35m🔁 LLM mode=chat (audio_files={} )\x1b[0m".format(bool(USE_AUDIO)))
                 except Exception as e:
                     log_message(f"ℹ️ chat() failed, fallback to text-only generate: {e}")
 
@@ -213,7 +215,8 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                 )
                 raw = tokenizer.decode(out[0], skip_special_tokens=True)
                 if DEBUG_MODE:
-                    log_message("🔁 LLM mode=generate (text-only fallback)")
+                    # Magenta
+                    log_message("\x1b[35m🔁 LLM mode=generate (text-only fallback)\x1b[0m")
 
         if not raw:
             raise ValueError("Empty response from model")
@@ -221,9 +224,15 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
         # Debug: Rohantwort sichtbar machen (gekürzt) und optional in Datei ablegen
         if DEBUG_MODE:
             raw_preview = str(raw)[:800].replace("\n", " ")
-            log_message(f"🧪 RAW_OUT len={len(str(raw))}: '{raw_preview}'")
+            # Yellow
+            log_message(f"\x1b[33m🧪 RAW_OUT len={len(str(raw))}: '{raw_preview}'\x1b[0m")
             try:
-                raw_path = os.path.splitext(file_path)[0] + "_llm_raw.txt"
+                # Speichere RAW in data/logs/<basename>_llm_raw.txt
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                logs_dir = os.path.join(project_root, 'data', 'logs')
+                os.makedirs(logs_dir, exist_ok=True)
+                base = os.path.splitext(os.path.basename(file_path))[0]
+                raw_path = os.path.join(logs_dir, f"{base}_llm_raw.txt")
                 with open(raw_path, "w", encoding="utf-8") as rf:
                     rf.write(f"# LLM RAW OUTPUT\n")
                     rf.write(f"timestamp: {datetime.utcnow().isoformat()}Z\n")
@@ -235,9 +244,11 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                     rf.write(combined_prompt)
                     rf.write("\n\n## RAW\n")
                     rf.write(str(raw))
-                log_message(f"💾 RAW saved: {os.path.basename(raw_path)}")
+                # Green
+                log_message(f"\x1b[32m💾 RAW saved: {os.path.basename(raw_path)}\x1b[0m")
             except Exception as e:
-                log_message(f"⚠️ RAW save failed: {e}")
+                # Red
+                log_message(f"\x1b[31m⚠️ RAW save failed: {e}\x1b[0m")
 
         tags = extract_clean_tags(raw)
 
