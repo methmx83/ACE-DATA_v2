@@ -172,3 +172,11 @@ Siehe `CHANGELOG.md` im Repository.
 ---
 
 *Automatisiere deinen Audio-Datenaufbau – schnell, lokal, strukturiert.*
+
+## 🤝 Beiträge, Issues & PRs
+- Bitte nutze die Vorlagen unter `.github/ISSUE_TEMPLATE/`:
+  - Bug report
+  - Feature request
+  - Improve Tag Diversity (MuFun)
+- Pull Requests bitte mit Template `.github/PULL_REQUEST_TEMPLATE.md` erstellen und auf ein Issue referenzieren (z. B. "Closes #123").
+- Projektkontext: siehe `docs/CONTEXT.md`.
