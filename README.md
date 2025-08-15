@@ -1,13 +1,13 @@
 <h1 align="center">🎵 ACE-DATA v2 – ACE-Step Data Tool</h1>
 <p align="center">
   <strong>Lokales Automations-Tool für Lyrics, Tags & BPM – kompatibel mit ACE-Step</strong><br>
-  <em>Extrahiert Lyrics, generiert strukturierte Prompt-Tags & ermittelt BPM – vollständig lokal mit Ollama + Gradio</em>
+  <em>Extrahiert Lyrics, generiert strukturierte Prompt-Tags & ermittelt BPM – lokal mit Gradio; LLM: Ollama (v1) oder MuFun (HF, v2)</em>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
   <img src="https://img.shields.io/badge/Python-3.11-blue" alt="Python">
-  <img src="https://img.shields.io/badge/Ollama-Chat_API-blue" alt="Ollama">
+  <img src="https://img.shields.io/badge/LLM-Ollama_|_MuFun-blue" alt="LLM">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Content-CC--BY--NC--4.0-lightgrey" alt="CC BY-NC 4.0">
 </p>
@@ -23,7 +23,7 @@
 - 💾 Automatische Ausgabe von `*_lyrics.txt` & `*_prompt.txt`
 - 🧩 Tags: lowercase-hyphenated, max. 2 Genres, BPM-Tag forciert
 - 🖥️ Minimalistische Gradio WebUI (nur Kern-Workflow – Advanced Tabs folgen später)
-- � Retry-/Recovery-Strategien für Ollama (Reset/Reload/Delay)
+- 🔁 Retry-/Recovery-Strategien (Ollama) bzw. Fallback chat→generate (MuFun)
 - 🪵 Zentrales Logging (`shared_logs.py`)
 - ⚙️ Konfigurierbar über `config/config.json`
 - 🧹 Lyrics-Cleanup vor Tagging (Entfernung Intro-Müll bis erste [Section])
@@ -63,20 +63,29 @@ python -c "import nltk; nltk.download('vader_lexicon'); nltk.download('stopwords
 ollama pull dein-modell
 ```
 
-## � Konfiguration (`config/config.json`)
+## 🔧 Konfiguration (`config/config.json`)
+Aktuelles Beispiel (MuFun, lokal):
 ```json
 {
   "input_dir": "data/audio",
-  "model_name": "deep-x1_q4:latest",
-  "ollama_url": "http://localhost:11434/api/generate",
-  "retry_count": 2,
-  "request_delay": 1.5
+  "hf_model_path": "Z:/AI/projects/.models/generative/mufun",
+  "use_audio": true,
+  "audio_max_seconds": 45,
+  "downsample_hz": 16000,
+  "empty_cache_between_files": true,
+  "debug": false,
+  "gen_max_new_tokens": 64,
+  "gen_temperature": 0.2,
+  "gen_top_p": 0.9,
+  "gen_repetition_penalty": 1.1
 }
 ```
 - input_dir: Root mit Audiodateien (rekursiv)
-- model_name: Ollama Modell (GGUF lokal)
-- retry_count: max. Tagging-Versuche
-- request_delay: Pause zwischen Retries
+- hf_model_path: Lokaler Ordner des MuFun-Modells (oder leer für HF-Download)
+- use_audio: Audio dem LLM übergeben (True) oder nur Text-Prompt
+- audio_max_seconds/downsample_hz: Optionales Vorverarbeiten
+- empty_cache_between_files: GPU-Cache leeren nach Datei
+- gen_*: Generations-Grenzen für kurze/stabile Antworten
 
 ## 🚀 Quickstart
 ```bash
@@ -104,7 +113,7 @@ song_prompt.txt   # Tags: bpm-92, dark, german-rap, male-vocal, bass-heavy, ...
 - Mindestens: vocals, instrument(e), mood, rap-style (falls passend)
 - BPM-Tag: `bpm-XXX` (falls ermittelt)
 - Moods/Styles: Referenz in `include/Moods.md`
-- LLM-Ansteuerung: Ollama Chat Endpoint (`/api/chat` aus `ollama_url` abgeleitet)
+- LLM-Ansteuerung: Ollama (Chat-API) ODER MuFun (HF lokal, chat→generate Fallback)
 
 ## 🥁 BPM-Erkennung (Kurz)
 Pipeline:
@@ -148,18 +157,8 @@ ACE-DATA_v2/
 - Tests: Unit-Tests für Tag-Parsing & BPM-Snap
 - Changelog-Datei (siehe unten)
 
-## 🧾 (Optional) Changelog Start
-Siehe Vorschlag in Diskussion – Datei `CHANGELOG.md` kann hinzugefügt werden:
-```
-## [Unreleased]
-- Export-Tab reaktivieren
-- Preset-Verwaltung UI
-
-## [0.2.0] - 2025-08-12
-Added: BPM Robustheit, Moods.md Integration, Lyrics Cleaner
-Changed: Minimal UI, Tag-Regeln geschärft
-Removed: alter metadata helper
-```
+## 🧾 Changelog
+Siehe `CHANGELOG.md` im Repository.
 
 ## 🧩 Kompatibel mit
 - ACE-Step (Dataset-Aufbereitung)

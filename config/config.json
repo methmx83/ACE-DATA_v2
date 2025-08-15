@@ -1,7 +1,14 @@
 {
   "input_dir": "data/audio",
-  "model_name": "deep-x1_q4:latest",
-  "ollama_url": "http://localhost:11434/api/generate",
-  "retry_count": 2,
-  "request_delay": 1.5
+  "hf_model_path": "Z:/AI/projects/.models/generative/mufun",
+  "use_audio": true,
+  "audio_max_seconds": 45,
+  "downsample_hz": 16000,
+  "empty_cache_between_files": true,
+  "debug": false,
+  "gen_max_new_tokens": 64,
+  "gen_temperature": 0.2,
+  "gen_top_p": 0.9,
+  "gen_repetition_penalty": 1.1
+
 }

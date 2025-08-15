@@ -1,22 +1,16 @@
-
 ## Fortschritt (Zusammenfassung)
 - Struktur konsolidiert (Dubletten entfernt: alter metadata helper, moods verlagert)
 - BPM-Erkennung stabilisiert (Halftime/Double-Korrektur, Snap, Percussion-Fokus)
-- Tagging: BPM-Tag-Fix (Variable & Scope), Retry-/Reload-Strategie verfeinert
-- Lyrics-Pipeline: Cleaning vor Tagging; doppelter Cleanup reduziert
-- UI: Stark vereinfacht (nur Kern-Workflow), Export & Editor temporär entfernt
-- Konfiguration: `input_dir` now [audio](http://_vscodecontentref_/6) → rekursiv verarbeitet
-- Logging: Einheitlich über [shared_logs.log_message()](http://_vscodecontentref_/7)
-- Preset/Moods: Zentrale Sammlung in [Moods.md](http://_vscodecontentref_/8) integriert
-- Git Hygiene: Löschungen und Umbenennungen sauber committed
-- Fehlersuche: BPM None → falsches kwargs entfernt; UnboundLocalError im bpm_tag Block gefixt
-- Pfadinkonsistenz (Slash/Backslash) erklärt (kosmetisch)
+- Tagging: MuFun (HF) Integration mit Lazy Loading, chat→generate Fallback, Limits; BPM-Tag an Pos. 0
+- Lyrics-Pipeline: Cleaning vor Tagging; kein doppelter Cleanup mehr
+- UI: Minimaler Kern-Workflow; Export & Editor als eigene Tabs geplant
+- Konfiguration: `hf_model_path`, `use_audio`, `audio_max_seconds`, `downsample_hz`, `empty_cache_between_files`, `gen_*`
+- Logging: Einheitlich über shared_logs.log_message()
+- Preset/Moods: Zentrale Sammlung in include/Moods.md
+- Doku: README aktualisiert, CHANGELOG 0.3.0, neuer Kontext-Snapshot in docs/CONTEXT.md
 
 ## Nächste sinnvolle Schritte (optional)
-- CHANGELOG.md wirklich anlegen
-- Kleine Unit-Tests (Tag-Parsing, BPM Normalisierung)
+- Unit-Tests (Tag-Parsing, BPM Normalisierung)
 - Export-/Editor-Tab modular hinzufügen
-- Option: Cache für bereits berechnete BPM (Performance bei großen Datasets)
-- Option: Log-Rotation oder persistentes Logfile
-
-Sag Bescheid, wenn ich dir den Patch direkt anwenden soll oder eine
+- Optional: Cache für bereits berechnete BPM (Performance bei großen Datasets)
+- Optional: Log-Rotation oder persistentes Logfile
