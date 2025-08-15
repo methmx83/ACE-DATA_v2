@@ -5,7 +5,7 @@ Dieser Snapshot hält den aktuellen Stand fest, damit neue Diskussionen/Chats oh
 ## Repository
 - Repo: https://github.com/methmx83/ACE-DATA_v2
 - Branch: main
-- Commit: <BITTE mit `git rev-parse --short HEAD` eintragen>
+- Commit: 9219c64
 
 ## Systemumgebung
 - OS: Windows 10 Pro
@@ -23,7 +23,7 @@ Dieser Snapshot hält den aktuellen Stand fest, damit neue Diskussionen/Chats oh
   "audio_max_seconds": 45,
   "downsample_hz": 16000,
   "empty_cache_between_files": true,
-  "debug": false,
+  "debug": true,
   "gen_max_new_tokens": 64,
   "gen_temperature": 0.2,
   "gen_top_p": 0.9,
