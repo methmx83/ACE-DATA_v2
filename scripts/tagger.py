@@ -9,6 +9,7 @@ import unicodedata
 import json
 import warnings
 from shared_logs import LOGS, log_message
+from datetime import datetime
 
 log_message("... Music Tagger Script (MuFun) loaded ✅")
 
@@ -40,6 +41,7 @@ INPUT_DIR     = config.get('input_dir', 'data/audio')
 REQUEST_DELAY = float(config.get('request_delay', 1.0))  # falls vorhanden
 HF_MODEL_PATH = config.get('hf_model_path', "")
 USE_AUDIO     = bool(config.get('use_audio', False))
+DEBUG_MODE    = bool(config.get('debug', False))
 
 # Optional: Decoding-Defaults aus Config (falls gesetzt)
 GEN_MAX_NEW_TOKENS   = int(config.get("gen_max_new_tokens", 64))
@@ -167,6 +169,13 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
 
         combined_prompt = f"{system_prompt}\n{user_prompt}"
 
+        # Debug: Eingabe-Kontext/Parameter kurz protokollieren (gekürzt)
+        if DEBUG_MODE:
+            prompt_preview = combined_prompt[:400].replace("\n", " ")
+            log_message(
+                f"🔎 LLM call | provider=MuFun | use_audio={USE_AUDIO} | mode=auto | max_new_tokens={GEN_MAX_NEW_TOKENS} | temp={GEN_TEMPERATURE} | top_p={GEN_TOP_P} | prompt[0:400]='{prompt_preview}'"
+            )
+
         # Inferenz mit Fallback (chat → generate)
         with torch.inference_mode():
             raw = None
@@ -182,6 +191,8 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                         top_p=GEN_TOP_P,
                     )
                     raw = result.get("prompt") if isinstance(result, dict) else str(result)
+                    if DEBUG_MODE:
+                        log_message("🔁 LLM mode=chat (audio_files={} )".format(bool(USE_AUDIO)))
                 except Exception as e:
                     log_message(f"ℹ️ chat() failed, fallback to text-only generate: {e}")
 
@@ -201,9 +212,32 @@ bpm-92, male/ female-vocal, synthesizer, drums, aggressive, gangsta-rap, german-
                     eos_token_id=getattr(tokenizer, "eos_token_id", None),
                 )
                 raw = tokenizer.decode(out[0], skip_special_tokens=True)
+                if DEBUG_MODE:
+                    log_message("🔁 LLM mode=generate (text-only fallback)")
 
         if not raw:
             raise ValueError("Empty response from model")
+
+        # Debug: Rohantwort sichtbar machen (gekürzt) und optional in Datei ablegen
+        if DEBUG_MODE:
+            raw_preview = str(raw)[:800].replace("\n", " ")
+            log_message(f"🧪 RAW_OUT len={len(str(raw))}: '{raw_preview}'")
+            try:
+                raw_path = os.path.splitext(file_path)[0] + "_llm_raw.txt"
+                with open(raw_path, "w", encoding="utf-8") as rf:
+                    rf.write(f"# LLM RAW OUTPUT\n")
+                    rf.write(f"timestamp: {datetime.utcnow().isoformat()}Z\n")
+                    rf.write(f"provider: MuFun\n")
+                    rf.write(f"mode: {'chat' if hasattr(model,'chat') else 'generate'}\n")
+                    rf.write(f"use_audio: {USE_AUDIO}\n")
+                    rf.write(f"max_new_tokens: {GEN_MAX_NEW_TOKENS}, temperature: {GEN_TEMPERATURE}, top_p: {GEN_TOP_P}, repetition_penalty: {GEN_REPETITION_PENALTY}\n\n")
+                    rf.write("## PROMPT\n")
+                    rf.write(combined_prompt)
+                    rf.write("\n\n## RAW\n")
+                    rf.write(str(raw))
+                log_message(f"💾 RAW saved: {os.path.basename(raw_path)}")
+            except Exception as e:
+                log_message(f"⚠️ RAW save failed: {e}")
 
         tags = extract_clean_tags(raw)
 
